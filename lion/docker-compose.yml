@@ -1,0 +1,145 @@
+version: "3"
+
+services:
+  # 数据库
+  mysql:
+    container_name: mysql
+    image: mysql:8.0.19
+    ports:
+        - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 'root@123'
+#    restart: always
+  # 缓存数据库
+  redis:
+        container_name: redis
+        image: redis
+        command: redis-server --requirepass lion
+        ports:
+            - "6379:6379"
+  #        restart: always
+  # 消息中间件
+  rabbitmq:
+        container_name: rabbitmq
+        image: rabbitmq:3.8.2
+        ports:
+            # JMS 端口
+            - "5672:5672"
+            # 管理端口 default user:pass = guest:guest
+            - "15672:15672"
+#        restart: always
+  # 注册中心
+  nacos:
+    container_name: nacos
+    image: nacos/nacos-server:1.1.4
+    ports:
+      - "8848:8848"
+    environment:
+      MODE: standalone
+#    restart: always
+  # 流控、熔断、降级
+  sentinel:
+    container_name: sentinel
+    image: bladex/sentinel-dashboard:1.7.1
+    ports:
+      - "8858:8858"
+    restart: always
+  # 链路追踪
+  zipkin:
+    container_name: zipkin
+    image: openzipkin/zipkin:2.20
+    ports:
+      - "9411:9411"
+    environment:
+      RABBIT_ADDRESSES: 192.168.0.109:5672
+      RABBIT_USER: guest
+      RABBIT_PASSWORD: guest
+      STORAGE_TYPE: mysql
+      MYSQL_HOST: 192.168.0.109
+      MYSQL_USER: root
+      MYSQL_PASS: root@123
+      MYSQL_DB: zipkin
+    restart: always
+  # APM Server
+  skywalking-oap-server:
+    image: apache/skywalking-oap-server:6.6.0-es7
+    container_name: skywalking-oap-server
+    ports:
+      - "11800:11800"
+      - "12800:12800"
+    environment:
+      SW_STORAGE: mysql
+      SW_JDBC_URL: jdbc:mysql://localhost:3306/skywalking
+      SW_DATA_SOURCE_USER: lion
+      SW_DATA_SOURCE_PASSWORD: lion
+    restart: always
+  # APM UI
+  skywalking-ui:
+    image: apache/skywalking-ui:6.6.0
+    container_name: skywalking-ui
+    ports:
+      - "8900:8080"
+    depends_on:
+      - skywalking-oap-server
+    environment:
+      SW_OAP_ADDRESS: skywalking-oap-server:12800
+    restart: always
+
+  lion-admin:
+    image: micyo202/lion-admin:2.0.0
+    container_name: lion-admin
+    ports:
+      - "8200:8200"
+    environment:
+      REGISTER_HOST: localhost
+    depends_on:
+      - nacos
+    restart: always
+
+  lion-gateway:
+    container_name: lion-gateway
+    image: micyo202/lion-gateway:2.0.0
+    ports:
+      - "8400:8400"
+    environment:
+      REGISTER_HOST: localhost
+    depends_on:
+      - nacos
+      - sentinel
+    restart: always
+
+  lion-auth:
+    container_name: lion-auth
+    image: micyo202/lion-auth:2.0.0
+    ports:
+      - "8888:8888"
+    environment:
+      REGISTER_HOST: localhost
+    depends_on:
+      - nacos
+      - sentinel
+    restart: always
+
+  lion-demo-provider:
+    container_name: lion-demo-provider
+    image: micyo202/lion-demo-provider:2.0.0
+    ports:
+      - "8601:8601"
+    environment:
+      REGISTER_HOST: localhost
+    depends_on:
+      - nacos
+      - sentinel
+    restart: always
+
+  lion-demo-consumer:
+    container_name: lion-demo-consumer
+    image: micyo202/lion-demo-consumer:2.0.0
+    ports:
+      - "8701:8701"
+    environment:
+      REGISTER_HOST: localhost
+    depends_on:
+      - nacos
+      - sentinel
+    restart: always
